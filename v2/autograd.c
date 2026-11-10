@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include "autograd.h"
 #include <math.h>
+#include <string.h>
 
-Variable mt_create_var(float val)
+Variable mt_create_var(double val)
 {
     Variable var = {
         .val = val,
@@ -14,7 +15,7 @@ Variable mt_create_var(float val)
     return var;
 }
 
-Variable mt_create_var_debug(float val, char name)
+Variable mt_create_var_debug(double val, char *mark)
 {
     Variable var = {
         .val = val,
@@ -22,8 +23,8 @@ Variable mt_create_var_debug(float val, char name)
         .deps = {0},
         .backward = NULL,
         .grad = 0.,
-        .visited = false,
-        .debug = name};
+        .visited = false};
+    strlcpy(var.debug, mark, sizeof(var.debug));
     return var;
 }
 
@@ -83,7 +84,7 @@ static void _backward(Variable **node_ls, size_t len)
 void mt_backward(Variable *res)
 {
     // build dependent order list by last DFS
-    Variable *node_ls[100];
+    Variable *node_ls[10000];
     size_t cnt = 0;
     size_t *cnt_ptr = &cnt;
     _build_dep_ordered_list_recur(res, node_ls, cnt_ptr);
@@ -93,7 +94,7 @@ void mt_backward(Variable *res)
     clear_visiteds(cnt, node_ls);
 }
 
-static void _backward_grad(Variable *dep, float grad)
+static void _backward_grad(Variable *dep, double grad)
 {
     dep->grad += grad;
 }
@@ -101,7 +102,7 @@ static void _backward_grad(Variable *dep, float grad)
 /*
  * Add
  */
-static void _add_backward(Variable *res)
+void mt_add_backward(Variable *res)
 {
     if (res->deps_size == 0)
         return;
@@ -113,12 +114,12 @@ static void _add_backward(Variable *res)
 Variable mt_add(Variable *left, Variable *right)
 {
     // computation
-    float res_val = left->val + right->val;
+    double res_val = left->val + right->val;
 
     // meta data
     Variable res = {
         .val = res_val,
-        .backward = _add_backward,
+        .backward = mt_add_backward,
         .deps_size = 2,
         .deps = {left, right},
         .grad = 0.,
@@ -129,7 +130,7 @@ Variable mt_add(Variable *left, Variable *right)
 /*
  * Sub
  */
-static void _sub_backward(Variable *res)
+void mt_sub_backward(Variable *res)
 {
     if (res->deps_size == 0)
         return;
@@ -141,12 +142,12 @@ static void _sub_backward(Variable *res)
 Variable mt_sub(Variable *left, Variable *right)
 {
     // computation
-    float res_val = left->val - right->val;
+    double res_val = left->val - right->val;
 
     // meta data
     Variable res = {
         .val = res_val,
-        .backward = _sub_backward,
+        .backward = mt_sub_backward,
         .deps_size = 2,
         .deps = {left, right},
         .grad = 0.,
@@ -157,7 +158,7 @@ Variable mt_sub(Variable *left, Variable *right)
 /*
  * Mul
  */
-static void _mul_backward(Variable *res)
+void mt_mul_backward(Variable *res)
 {
     if (res->deps_size == 0)
         return;
@@ -169,12 +170,12 @@ static void _mul_backward(Variable *res)
 Variable mt_mul(Variable *left, Variable *right)
 {
     // computation
-    float res_val = left->val * right->val;
+    double res_val = left->val * right->val;
 
     // meta data
     Variable res = {
         .val = res_val,
-        .backward = _mul_backward,
+        .backward = mt_mul_backward,
         .deps_size = 2,
         .deps = {left, right},
         .grad = 0.,
@@ -185,7 +186,7 @@ Variable mt_mul(Variable *left, Variable *right)
 /*
  * Div
  */
-static void _div_backward(Variable *res)
+void mt_div_backward(Variable *res)
 {
     if (res->deps_size == 0)
         return;
@@ -200,12 +201,12 @@ static void _div_backward(Variable *res)
 Variable mt_div(Variable *left, Variable *right)
 {
     // computation
-    float res_val = left->val / right->val;
+    double res_val = left->val / right->val;
 
     // meta data
     Variable res = {
         .val = res_val,
-        .backward = _div_backward,
+        .backward = mt_div_backward,
         .deps_size = 2,
         .deps = {left, right},
         .grad = 0.,
@@ -216,26 +217,26 @@ Variable mt_div(Variable *left, Variable *right)
 /*
  * Pow
  */
-static void _pow_backward(Variable *res)
+void mt_pow_backward(Variable *res)
 {
     if (res->deps_size == 0)
         return;
 
     Variable *dep = res->deps[0];
-    float expo = res->opr_param;
+    double expo = res->opr_param;
 
-    _backward_grad(dep, res->grad * expo * powf(dep->val, expo - 1));
+    _backward_grad(dep, res->grad * expo * pow(dep->val, expo - 1));
 }
 
-Variable mt_pow(Variable *x, float expo)
+Variable mt_pow(Variable *x, double expo)
 {
     // computation
-    float res_val = powf(x->val, expo);
+    double res_val = pow(x->val, expo);
 
     // meta data
     Variable res = {
         .val = res_val,
-        .backward = _pow_backward,
+        .backward = mt_pow_backward,
         .opr_param = expo,
         .deps_size = 1,
         .deps = {x},
@@ -247,25 +248,25 @@ Variable mt_pow(Variable *x, float expo)
 /*
  * Exp
  */
-static void _exp_backward(Variable *res)
+void mt_exp_backward(Variable *res)
 {
     if (res->deps_size == 0)
         return;
 
     Variable *dep = res->deps[0];
 
-    _backward_grad(dep, res->grad * expf(dep->val));
+    _backward_grad(dep, res->grad * exp(dep->val));
 }
 
 Variable mt_exp(Variable *x)
 {
     // computation
-    float res_val = expf(x->val);
+    double res_val = exp(x->val);
 
     // meta data
     Variable res = {
         .val = res_val,
-        .backward = _exp_backward,
+        .backward = mt_exp_backward,
         .deps_size = 1,
         .deps = {x},
         .grad = 0.,
@@ -276,7 +277,7 @@ Variable mt_exp(Variable *x)
 /*
  * Log
  */
-static void _log_backward(Variable *res)
+void mt_log_backward(Variable *res)
 {
     if (res->deps_size == 0)
         return;
@@ -289,12 +290,12 @@ static void _log_backward(Variable *res)
 Variable mt_log(Variable *x)
 {
     // computation
-    float res_val = logf(x->val);
+    double res_val = log(x->val);
 
     // meta data
     Variable res = {
         .val = res_val,
-        .backward = _log_backward,
+        .backward = mt_log_backward,
         .deps_size = 1,
         .deps = {x},
         .grad = 0.,
@@ -305,25 +306,25 @@ Variable mt_log(Variable *x)
 /*
  * Sin
  */
-static void _sin_backward(Variable *res)
+void mt_sin_backward(Variable *res)
 {
     if (res->deps_size == 0)
         return;
 
     Variable *dep = res->deps[0];
 
-    _backward_grad(dep, res->grad * (cosf(dep->val)));
+    _backward_grad(dep, res->grad * (cos(dep->val)));
 }
 
 Variable mt_sin(Variable *x)
 {
     // computation
-    float res_val = sinf(x->val);
+    double res_val = sin(x->val);
 
     // meta data
     Variable res = {
         .val = res_val,
-        .backward = _sin_backward,
+        .backward = mt_sin_backward,
         .deps_size = 1,
         .deps = {x},
         .grad = 0.,
@@ -334,25 +335,25 @@ Variable mt_sin(Variable *x)
 /*
  * Cos
  */
-static void _cos_backward(Variable *res)
+void mt_cos_backward(Variable *res)
 {
     if (res->deps_size == 0)
         return;
 
     Variable *dep = res->deps[0];
 
-    _backward_grad(dep, -res->grad * (sinf(dep->val)));
+    _backward_grad(dep, -res->grad * (sin(dep->val)));
 }
 
 Variable mt_cos(Variable *x)
 {
     // computation
-    float res_val = cosf(x->val);
+    double res_val = cos(x->val);
 
     // meta data
     Variable res = {
         .val = res_val,
-        .backward = _cos_backward,
+        .backward = mt_cos_backward,
         .deps_size = 1,
         .deps = {x},
         .grad = 0.,

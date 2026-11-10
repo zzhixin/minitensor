@@ -4,34 +4,34 @@
 #include <stddef.h>
 
 typedef struct Variable Variable;
-typedef struct VarArray VarArray; 
+typedef struct VarArray VarArray;
 
-typedef void (*BackwardFunc) (Variable*);
+typedef void (*BackwardFunc)(Variable *);
 
 struct Variable
 {
-    float val;
-    float grad;
-    BackwardFunc backward;  // if leaf node, set as nullptr
-    float opr_param;
+    double val;
+    double grad;
+    BackwardFunc backward; // if leaf node, set as nullptr
+    double opr_param;
     size_t deps_size;
-    Variable* deps[2];
+    Variable *deps[2];
 };
 
-Variable mt_create_var(float);
+Variable mt_create_var(double);
 
-void clear_grad(Variable*); 
-void clear_grads(size_t, Variable*[2]);
-void mt_backward(Variable*);
+void clear_grad(Variable *);
+void clear_grads(size_t, Variable *[2]);
+void mt_backward(Variable *);
 
-Variable mt_add(Variable*, Variable*);
-Variable mt_sub(Variable*, Variable*);
-Variable mt_mul(Variable*, Variable*);
-Variable mt_div(Variable*, Variable*);
-Variable mt_pow(Variable*, float);
-Variable mt_exp(Variable*);
-Variable mt_log(Variable*);
-Variable mt_sin(Variable*);
-Variable mt_cos(Variable*);
+Variable mt_add(Variable *, Variable *);
+Variable mt_sub(Variable *, Variable *);
+Variable mt_mul(Variable *, Variable *);
+Variable mt_div(Variable *, Variable *);
+Variable mt_pow(Variable *, double);
+Variable mt_exp(Variable *);
+Variable mt_log(Variable *);
+Variable mt_sin(Variable *);
+Variable mt_cos(Variable *);
 
 #endif

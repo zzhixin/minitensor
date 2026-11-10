@@ -14,7 +14,7 @@ backward(y);
 ```c
 Variable add(Variable* left, Variable* right) {
     // computation
-    float res_val = left->val + right->val;   
+    double res_val = left->val + right->val;   
 
     // meta data
     Variable* deps[2] = {left, right};

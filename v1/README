@@ -1,0 +1,37 @@
+### 取消Operator结构体, 使用函数
+```c
+Variable y = add(x1, x2);
+backward(y);
+
+Variable y = exp(x1);
+backward(y);
+```
+这样就可以轻松定义接受不同参数的函数, 而不需要用户在调用时显式创建一个variable array.
+
+为了避免悬空指针, 我们不用基于数组指针的VarArray. 为了处理可变长度数组, 预分配最大长度的空间, 这里我们假定最多两个参数. (对于内存占用较小的变长数据, 这是标准做法, 用malloc开销太大).
+
+这些operator函数除了进行计算之外, 还要建立变量之间的依赖关系, 统一模板为
+```c
+Variable add(Variable* left, Variable* right) {
+    // computation
+    float res_val = left->val + right->val;   
+
+    // meta data
+    Variable* deps[2] = {left, right};
+    Variable res = {
+        .val = res_val,
+        .back_func = add_backward,
+        .deps_size = 2,
+        .deps = deps,
+        .grad = 0.,
+    }; 
+    return res;
+}
+```
+
+### backward
+深度优先遍历, 每次后向传播如果是叶子节点(自由变量)则累加梯度, 反之覆盖. 如此得到的梯度是每一种可能的从结果到叶子节点的路径对应的梯度, 因为中间节点的梯度采用覆盖策略, 所以每一条分支的梯度不会互相影响. 保证最终的自由变量梯度正确, 但是中间节点的梯度不保证. 
+
+问题在于, 如果计算图有很多汇合与分叉, 会导致梯度计算大量"重复"(具体值不重复, 流程重复), 计算复杂度大增. 
+
+计算图是一个有向无环图, 并且只有一个纯出度的节点. 考虑这种情形, 一个图从根节点出发, 分成k层, 除去第一个节点, 有O(N/k)层, 如果相邻两层之间是"全连接", 那么一共有O((N/k)^k)次运算, 这是一个关于k的钟形曲线, 最大值为N/k=e时, 即O(e^(N/e)), 而V~N^2, 所以复杂度为O(e^\sqrt{V}), 复杂度远大于多项式时间.

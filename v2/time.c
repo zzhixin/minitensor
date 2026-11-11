@@ -39,10 +39,8 @@ double mt_rand()
     return mt_rand_between(0., 1.);
 }
 
-void generate_complex_graph(Graph *graph, size_t graph_size, size_t num_leaf_node)
+void generate_complex_graph(Variable *graph, size_t graph_size, size_t num_leaf_node)
 {
-    assert(graph->size == 0);
-    assert(graph_size <= graph->capcity);
     assert(num_leaf_node >= 2);
     // Summing all leaves requires at least num_leaf_node - 1 binary nodes.
     assert(num_leaf_node - 1 <= graph_size);
@@ -52,7 +50,8 @@ void generate_complex_graph(Graph *graph, size_t graph_size, size_t num_leaf_nod
     size_t terminal_count = num_leaf_node;
     for (size_t i = 0; i < num_leaf_node; i++)
     {
-        mt_create_var(graph, mt_rand());
+        Variable node = mt_create_var(mt_rand());
+        graph[i] = node;
         is_terminal[i] = true;
     }
 
@@ -67,14 +66,14 @@ void generate_complex_graph(Graph *graph, size_t graph_size, size_t num_leaf_nod
         // another terminal, then use all remaining slots for the sum.
         if (remaining == terminal_count)
         {
-            mt_sin(graph, &graph->data[i - 1]);
+            graph[i] = mt_sin(&graph[i - 1]);
         }
         else
         {
             double opr_dice = mt_rand_between(0., 8.);
             if (opr_dice < 4.)
             { // binary opr
-                Variable *(*opr)(Graph *, Variable *, Variable *);
+                BinaryOpr opr;
                 if (opr_dice < 1.)
                     opr = mt_add;
                 else if (opr_dice < 2.)
@@ -87,14 +86,14 @@ void generate_complex_graph(Graph *graph, size_t graph_size, size_t num_leaf_nod
                 int deps_dice_left;
                 int deps_dice_right;
                 mt_rand_between_diff_2_int(&deps_dice_left, &deps_dice_right, 0, i - 1);
-                Variable *left = &graph->data[deps_dice_left];
-                Variable *right = &graph->data[deps_dice_right];
-                opr(graph, left, right);
+                Variable *left = &graph[deps_dice_left];
+                Variable *right = &graph[deps_dice_right];
+                graph[i] = opr(left, right);
             }
             else
             {
                 // unary opr
-                Variable *(*opr)(Graph *, Variable *);
+                UnaryOpr opr;
                 if (opr_dice < 5.)
                     opr = mt_exp;
                 else if (opr_dice < 6.)
@@ -104,16 +103,16 @@ void generate_complex_graph(Graph *graph, size_t graph_size, size_t num_leaf_nod
                 else if (opr_dice < 8.)
                     opr = mt_cos;
                 int dep_dice = mt_rand_between_int(0, i - 1);
-                Variable *dep = &graph->data[dep_dice];
-                opr(graph, dep);
+                Variable *dep = &graph[dep_dice];
+                graph[i] = opr(dep);
             }
         }
 
         is_terminal[i] = true;
         terminal_count++;
-        for (size_t j = 0; j < graph->data[i].deps_size; j++)
+        for (size_t j = 0; j < graph[i].deps_size; j++)
         {
-            size_t dep = (size_t)(graph->data[i].deps[j] - graph->data);
+            size_t dep = (size_t)(graph[i].deps[j] - graph);
             if (is_terminal[dep])
             {
                 is_terminal[dep] = false;
@@ -132,17 +131,16 @@ void generate_complex_graph(Graph *graph, size_t graph_size, size_t num_leaf_nod
             continue;
         if (sum == NULL)
         {
-            sum = &graph->data[j];
+            sum = &graph[j];
         }
         else
         {
-            sum = mt_add(graph, sum, &graph->data[j]);
-            i++;
+            graph[i] = mt_add(sum, &graph[j]);
+            sum = &graph[i++];
         }
     }
     assert(i == graph_size);
-    assert(graph->size == graph_size);
-    assert(sum == &graph->data[graph_size - 1]);
+    assert(sum == &graph[graph_size - 1]);
 }
 
 void test_generate_complex_graph()
@@ -151,7 +149,7 @@ void test_generate_complex_graph()
 
     int graph_size = 1000;
     int num_leaf = 10;
-    Graph *graph = mt_create_graph(graph_size);
+    Variable graph[graph_size];
     generate_complex_graph(graph, graph_size, num_leaf);
 
     printf("add: %p\n", mt_add_backward);
@@ -165,11 +163,10 @@ void test_generate_complex_graph()
 
     for (size_t i = 0; i < graph_size; i++)
     {
-        Variable *node = &graph->data[i];
+        Variable *node = &graph[i];
         printf("node: %p\n  backward: %p\n  deps[0]: %p\n  deps[1]: %p\n  val: %.2f\n",
                node, node->backward, node->deps[0], node->deps[1], node->val);
     }
-    free(graph);
 }
 
 void time_complex_graph()
@@ -178,65 +175,49 @@ void time_complex_graph()
 
     int graph_size = 1000;
     int num_leaf = 5;
-    Graph *graph = mt_create_graph(graph_size);
+    Variable graph[graph_size];
     generate_complex_graph(graph, graph_size, num_leaf);
 
     clock_t start = clock();
     for (size_t i = 0; i < TIMING_RUNS; i++)
     {
-        clear_graph_grads(graph);
-        mt_backward(&graph->data[graph_size - 1]);
+        for (size_t i = 0; i < graph_size; ++i)
+            graph[i].grad = 0.;
+        mt_backward(&graph[graph_size - 1]);
     }
     clock_t end = clock();
     double time_spent = (double)(end - start) / CLOCKS_PER_SEC / TIMING_RUNS;
-    printf("complex graph rebuild order time spent: %.4f us\n", time_spent * 1e6);
-
-    start = clock();
-    for (size_t i = 0; i < TIMING_RUNS; i++)
-    {
-        clear_graph_grads(graph);
-        mt_backward_graph(graph);
-    }
-    end = clock();
-    time_spent = (double)(end - start) / CLOCKS_PER_SEC / TIMING_RUNS;
-    printf("complex graph use graph order time spent: %.4f us\n", time_spent * 1e6);
-
-    free(graph);
+    printf("time spent: %.4f us\n", time_spent * 1e6);
 }
 
 void time_simple_graph()
 {
-    Graph *graph = mt_create_graph(100);
-    Variable *a = mt_create_var_debug(graph, 2., "a");
-    Variable *b = mt_create_var_debug(graph, 3., "b");
-    Variable *c = mt_sin(graph, a);
-    strlcpy(c->debug, "c", sizeof(c->debug));
-    Variable *d = mt_div(graph, c, b);
-    strlcpy(d->debug, "d", sizeof(c->debug));
-    Variable *e = mt_exp(graph, d);
-    strlcpy(e->debug, "e", sizeof(c->debug));
-    Variable *f = mt_add(graph, c, e);
-    strlcpy(f->debug, "f", sizeof(c->debug));
+    Variable a = mt_create_var_debug(2., "a");
+    Variable b = mt_create_var_debug(3., "b");
+    Variable c = mt_sin(&a);
+    strlcpy(c.debug, "c", sizeof(c.debug));
+    Variable d = mt_div(&c, &b);
+    strlcpy(d.debug, "d", sizeof(c.debug));
+    Variable e = mt_exp(&d);
+    strlcpy(e.debug, "e", sizeof(c.debug));
+    Variable f = mt_add(&c, &e);
+    strlcpy(f.debug, "f", sizeof(c.debug));
+    Variable *vars_ls[] = {&a, &b, &d, &e, &c, &f};
 
     clock_t start = clock();
     for (size_t i = 0; i < TIMING_RUNS; i++)
     {
-        clear_graph_grads(graph);
-        mt_backward(f);
+        clear_grads(6, vars_ls);
+        mt_backward(&f);
     }
     clock_t end = clock();
-    double time_spent = (double)(end - start) / CLOCKS_PER_SEC / TIMING_RUNS;
-    printf("simple graph rebuild order time spent: %.4f us\n", time_spent * 1e6);
 
-    start = clock();
-    for (size_t i = 0; i < TIMING_RUNS; i++)
-    {
-        clear_graph_grads(graph);
-        mt_backward_graph(graph);
-    }
-    end = clock();
-    time_spent = (double)(end - start) / CLOCKS_PER_SEC / TIMING_RUNS;
-    printf("simple graph use graph order time spent: %.4f us\n", time_spent * 1e6);
+    double time_spent = (double)(end - start) / CLOCKS_PER_SEC / TIMING_RUNS;
+    printf("time spent: %.4f us\n", time_spent * 1e6);
+
+    assert(f.val == sin(a.val) + exp(sin(a.val) / b.val));
+    assert(b.grad == -exp(sin(a.val) / b.val) * sin(a.val) / pow(b.val, 2));
+    assert(a.grad == cos(a.val) + exp(sin(a.val) / b.val) * cos(a.val) / b.val);
 }
 
 int main()

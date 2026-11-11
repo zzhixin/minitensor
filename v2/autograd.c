@@ -2,43 +2,30 @@
 #include "autograd.h"
 #include <math.h>
 #include <string.h>
-#include <stdlib.h>
 
-Graph *mt_create_graph(size_t n)
+Variable mt_create_var(double val)
 {
-    Graph *graph = malloc(2 * sizeof(size_t) + n * sizeof(Variable));
-    graph->capcity = n;
-    graph->size = 0;
-    return graph;
-}
-
-Variable *mt_create_var(Graph *graph, double val)
-{
-    Variable *node = &graph->data[graph->size];
-    *node = (Variable){
+    Variable var = {
         .val = val,
         .deps_size = 0,
         .deps = {0},
         .backward = NULL,
         .grad = 0.,
         .visited = false};
-    graph->size++;
-    return node;
+    return var;
 }
 
-Variable *mt_create_var_debug(Graph *graph, double val, char *mark)
+Variable mt_create_var_debug(double val, char *mark)
 {
-    Variable *node = &graph->data[graph->size];
-    *node = (Variable){
+    Variable var = {
         .val = val,
         .deps_size = 0,
         .deps = {0},
         .backward = NULL,
         .grad = 0.,
         .visited = false};
-    strlcpy(node->debug, mark, sizeof(node->debug));
-    graph->size++;
-    return node;
+    strlcpy(var.debug, mark, sizeof(var.debug));
+    return var;
 }
 
 void clear_grad(Variable *x)
@@ -46,11 +33,11 @@ void clear_grad(Variable *x)
     x->grad = 0.;
 }
 
-void clear_graph_grads(Graph *graph)
+void clear_grads(size_t vars_size, Variable **vars)
 {
-    for (size_t i = 0; i < graph->size; ++i)
+    for (size_t i = 0; i < vars_size; ++i)
     {
-        clear_grad(&graph->data[i]);
+        clear_grad(vars[i]);
     }
 }
 
@@ -59,19 +46,11 @@ void clear_visited(Variable *x)
     x->visited = false;
 }
 
-void clear_graph_visiteds(Graph *graph)
+void clear_visiteds(size_t vars_size, Variable **vars)
 {
-    for (size_t i = 0; i < graph->size; ++i)
+    for (size_t i = 0; i < vars_size; ++i)
     {
-        clear_visited(&graph->data[i]);
-    }
-}
-
-void clear_visiteds(size_t ls_len, Variable **node_ls)
-{
-    for (size_t i = 0; i < ls_len; ++i)
-    {
-        clear_visited(node_ls[i]);
+        clear_visited(vars[i]);
     }
 }
 
@@ -115,18 +94,6 @@ void mt_backward(Variable *res)
     clear_visiteds(cnt, node_ls);
 }
 
-void mt_backward_graph(Graph *graph)
-{
-    graph->data[graph->size - 1].grad = 1.;
-    for (int i = graph->size - 1; i >= 0; i--)
-    {
-        Variable *node = &graph->data[i];
-        if (node->deps_size == 0)
-            continue;
-        node->backward(node);
-    }
-}
-
 static void _backward_grad(Variable *dep, double grad)
 {
     dep->grad += grad;
@@ -144,21 +111,19 @@ void mt_add_backward(Variable *res)
     _backward_grad(res->deps[1], res->grad);
 }
 
-Variable *mt_add(Graph *graph, Variable *left, Variable *right)
+Variable mt_add(Variable *left, Variable *right)
 {
     // computation
     double res_val = left->val + right->val;
 
     // meta data
-    Variable *res = &graph->data[graph->size];
-    *res = (Variable){
+    Variable res = {
         .val = res_val,
         .backward = mt_add_backward,
         .deps_size = 2,
         .deps = {left, right},
         .grad = 0.,
     };
-    graph->size++;
     return res;
 }
 
@@ -174,21 +139,19 @@ void mt_sub_backward(Variable *res)
     _backward_grad(res->deps[1], -res->grad);
 }
 
-Variable *mt_sub(Graph *graph, Variable *left, Variable *right)
+Variable mt_sub(Variable *left, Variable *right)
 {
     // computation
     double res_val = left->val - right->val;
 
     // meta data
-    Variable *res = &graph->data[graph->size];
-    *res = (Variable){
+    Variable res = {
         .val = res_val,
         .backward = mt_sub_backward,
         .deps_size = 2,
         .deps = {left, right},
         .grad = 0.,
     };
-    graph->size++;
     return res;
 }
 
@@ -204,21 +167,19 @@ void mt_mul_backward(Variable *res)
     _backward_grad(res->deps[1], res->grad * res->deps[0]->val);
 }
 
-Variable *mt_mul(Graph *graph, Variable *left, Variable *right)
+Variable mt_mul(Variable *left, Variable *right)
 {
     // computation
     double res_val = left->val * right->val;
 
     // meta data
-    Variable *res = &graph->data[graph->size];
-    *res = (Variable){
+    Variable res = {
         .val = res_val,
         .backward = mt_mul_backward,
         .deps_size = 2,
         .deps = {left, right},
         .grad = 0.,
     };
-    graph->size++;
     return res;
 }
 
@@ -237,21 +198,19 @@ void mt_div_backward(Variable *res)
     _backward_grad(right, -res->grad * left->val / (right->val * right->val));
 }
 
-Variable *mt_div(Graph *graph, Variable *left, Variable *right)
+Variable mt_div(Variable *left, Variable *right)
 {
     // computation
     double res_val = left->val / right->val;
 
     // meta data
-    Variable *res = &graph->data[graph->size];
-    *res = (Variable){
+    Variable res = {
         .val = res_val,
         .backward = mt_div_backward,
         .deps_size = 2,
         .deps = {left, right},
         .grad = 0.,
     };
-    graph->size++;
     return res;
 }
 
@@ -269,14 +228,13 @@ void mt_pow_backward(Variable *res)
     _backward_grad(dep, res->grad * expo * pow(dep->val, expo - 1));
 }
 
-Variable *mt_pow(Graph *graph, Variable *x, double expo)
+Variable mt_pow(Variable *x, double expo)
 {
     // computation
     double res_val = pow(x->val, expo);
 
     // meta data
-    Variable *res = &graph->data[graph->size];
-    *res = (Variable){
+    Variable res = {
         .val = res_val,
         .backward = mt_pow_backward,
         .opr_param = expo,
@@ -284,7 +242,6 @@ Variable *mt_pow(Graph *graph, Variable *x, double expo)
         .deps = {x},
         .grad = 0.,
     };
-    graph->size++;
     return res;
 }
 
@@ -301,21 +258,19 @@ void mt_exp_backward(Variable *res)
     _backward_grad(dep, res->grad * exp(dep->val));
 }
 
-Variable *mt_exp(Graph *graph, Variable *x)
+Variable mt_exp(Variable *x)
 {
     // computation
     double res_val = exp(x->val);
 
     // meta data
-    Variable *res = &graph->data[graph->size];
-    *res = (Variable){
+    Variable res = {
         .val = res_val,
         .backward = mt_exp_backward,
         .deps_size = 1,
         .deps = {x},
         .grad = 0.,
     };
-    graph->size++;
     return res;
 }
 
@@ -332,21 +287,19 @@ void mt_log_backward(Variable *res)
     _backward_grad(dep, res->grad / dep->val);
 }
 
-Variable *mt_log(Graph *graph, Variable *x)
+Variable mt_log(Variable *x)
 {
     // computation
     double res_val = log(x->val);
 
     // meta data
-    Variable *res = &graph->data[graph->size];
-    *res = (Variable){
+    Variable res = {
         .val = res_val,
         .backward = mt_log_backward,
         .deps_size = 1,
         .deps = {x},
         .grad = 0.,
     };
-    graph->size++;
     return res;
 }
 
@@ -363,21 +316,19 @@ void mt_sin_backward(Variable *res)
     _backward_grad(dep, res->grad * (cos(dep->val)));
 }
 
-Variable *mt_sin(Graph *graph, Variable *x)
+Variable mt_sin(Variable *x)
 {
     // computation
     double res_val = sin(x->val);
 
     // meta data
-    Variable *res = &graph->data[graph->size];
-    *res = (Variable){
+    Variable res = {
         .val = res_val,
         .backward = mt_sin_backward,
         .deps_size = 1,
         .deps = {x},
         .grad = 0.,
     };
-    graph->size++;
     return res;
 }
 
@@ -394,20 +345,18 @@ void mt_cos_backward(Variable *res)
     _backward_grad(dep, -res->grad * (sin(dep->val)));
 }
 
-Variable *mt_cos(Graph *graph, Variable *x)
+Variable mt_cos(Variable *x)
 {
     // computation
     double res_val = cos(x->val);
 
     // meta data
-    Variable *res = &graph->data[graph->size];
-    *res = (Variable){
+    Variable res = {
         .val = res_val,
         .backward = mt_cos_backward,
         .deps_size = 1,
         .deps = {x},
         .grad = 0.,
     };
-    graph->size++;
     return res;
 }

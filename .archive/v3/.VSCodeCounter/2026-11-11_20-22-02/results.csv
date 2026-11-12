@@ -1,0 +1,8 @@
+"filename", "language", "C", "Makefile", "C++", "comment", "blank", "total"
+"/home/zhixin/minitensor/v2/Makefile", "Makefile", 0, 17, 0, 1, 9, 27
+"/home/zhixin/minitensor/v2/autograd.c", "C", 311, 0, 0, 46, 56, 413
+"/home/zhixin/minitensor/v2/autograd.h", "C++", 0, 0, 55, 0, 13, 68
+"/home/zhixin/minitensor/v2/main.c", "C", 16, 0, 0, 0, 4, 20
+"/home/zhixin/minitensor/v2/test_autograd.c", "C", 203, 0, 0, 0, 40, 243
+"/home/zhixin/minitensor/v2/time.c", "C", 216, 0, 0, 7, 23, 246
+"Total", "-", 746, 17, 55, 54, 145, 1017

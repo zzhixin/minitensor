@@ -227,6 +227,7 @@ void test_compound_opr_complex()
 
 int main()
 {
+    printf("> test_autograd: start test\n");
     test_add();
     test_sub();
     test_mul();
@@ -238,5 +239,5 @@ int main()
     test_sin();
     test_exp_log();
     test_compound_opr_complex();
-    printf("All tests passed!\n");
+    printf("  test_autograd: all tests passed!\n");
 }

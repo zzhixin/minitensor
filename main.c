@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include "autograd.h"
+#include "tensor.h"
 
-int main()
+void run_autograd()
 {
     Graph *graph = mt_create_graph(100);
 
@@ -17,4 +18,16 @@ int main()
     printf("x1.grad: %.2f, x2.grad: %.2f\n\n", x1->grad, x2->grad);
 
     printf("x1.visited: %d\n", x1->visited);
+}
+
+void run_tensor()
+{
+    Vec *v = mt_create_vec_by(4, (double[]){0., 1., 2., 3.});
+    mt_print_vec(v);
+}
+
+int main()
+{
+    // run_autograd();
+    run_tensor();
 }
